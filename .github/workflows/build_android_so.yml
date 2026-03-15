@@ -1,6 +1,6 @@
 #github/workflows/build_android_so.yml
 #
-# Compile _pluning_core.so pour Android aarch64 #(Pydroid / PyCode)
+# Compile _pluning_core.so pour Android aarch64 (Pydroid / PyCode)
 #
 # ── Utilisation ──────────────────────────────────────────────────
 #  1. Créer un repo GitHub (même privé, c'est gratuit)
