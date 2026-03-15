@@ -1,16 +1,30 @@
+#github/workflows/build_android_so.yml
+#
+# Compile _pluning_core.so pour Android aarch64 (Pydroid / PyCode)
+#
+# ── Utilisation ──────────────────────────────────────────────────
+#  1. Créer un repo GitHub (même privé, c'est gratuit)
+#  2. Mettre _pluning_core.c dans le repo
+#  3. Mettre ce fichier dans  .github/workflows/build_android_so.yml
+#  4. Aller dans Actions → "Build Android .so" → Run workflow
+#  5. Télécharger l'artifact  _pluning_core_android_arm64
+#  6. Copier le .so dans le dossier de pluning.py sur le téléphone
+# ─────────────────────────────────────────────────────────────────
+
 name: Build Android .so
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    paths:
+      - "_pluning_core.c"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Android NDK
@@ -18,23 +32,55 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r26d
+          add-to-path: true
 
-      - name: Compile _pluning_core.c to .so
+      - name: Download CPython 3.12 Android headers + libpython
+        run: |
+          # Télécharger les headers CPython 3.12 pour Android aarch64
+          # Source : releases officielles BeeWare cpython-android
+          URL="https://github.com/beeware/cpython-android-source-libs/releases/download/3.12.3/python-3.12.3-android-aarch64.zip"
+          echo "Téléchargement headers Python Android aarch64..."
+          curl -L "$URL" -o cpython_android.zip
+          unzip -q cpython_android.zip -d cpython_android
+          # Trouver Python.h
+          INCLUDE_DIR=$(find cpython_android -name "Python.h" -printf "%h\n" | head -1)
+          echo "PYTHON_INCLUDE=$INCLUDE_DIR" >> $GITHUB_ENV
+          echo "Trouvé : $INCLUDE_DIR"
+          ls "$INCLUDE_DIR" | head -5
+
+      - name: Compile _pluning_core.so (aarch64-android)
         run: |
           NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
-          CC="$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
-          
-          echo "Compilateur: $CC"
-          
-          $CC -shared -fPIC -O3 -o _pluning_core.so src/_pluning_core.c -lm
-          
-          echo "=== Build Result ==="
-          ls -lh _pluning_core.so
-          file _pluning_core.so
+          CC="$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang"
+
+          echo "Compilateur : $CC"
+          echo "Include     : $PYTHON_INCLUDE"
+
+          $CC \
+            -shared \
+            -fPIC \
+            -O3 \
+            -ffast-math \
+            -Wall \
+            -o _pluning_core.cpython-312-aarch64-linux-android.so \
+            _pluning_core.c \
+            -I"$PYTHON_INCLUDE" \
+            -lm
+
+          echo ""
+          echo "=== Résultat ==="
+          ls -lh _pluning_core*.so
+          file _pluning_core*.so
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: _pluning_core_android_arm64
-          path: _pluning_core.so
+          path: _pluning_core*.so
           retention-days: 30
+
+      - name: Build summary
+        run: |
+          echo "## ✅ Build terminé !" >> $GITHUB_STEP_SUMMARY
+          echo "Télécharge l'artifact **_pluning_core_android_arm64**" >> $GITHUB_STEP_SUMMARY
+          echo "et copie le \`.so\` dans le même dossier que \`pluning.py\`." >> $GITHUB_STEP_SUMMARY
